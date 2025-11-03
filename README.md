@@ -1,5 +1,5 @@
 # <img src="src/binary_waterfall/resources/icon.png" height="20px" alt="Binary Waterfall"/> Binary Waterfall
-### A Raw Data Media PlayerD
+### A Raw Data Media Player
 
 <p align="center"><img src="docs/example.png" width="400px" alt="Running the program on mspaint.exe"/></p>
 
