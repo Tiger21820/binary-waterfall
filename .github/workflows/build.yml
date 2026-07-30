@@ -44,7 +44,10 @@ jobs:
 
       - name: Create version file info
         run: |
-          create-version-file src/binary_waterfall/version.yml --outfile file_version_info.txt
+          $content = Get-Content -Raw -Encoding UTF8 "src/binary_waterfall/version.yml"
+          $content = $content -replace [char]0x2618 -replace [char]0xFE0F, "shamrock"
+          Set-Content -Path "src/binary_waterfall/version_clean.yml" -Value $content -Encoding ASCII
+          create-version-file src/binary_waterfall/version_clean.yml --outfile file_version_info.txt
 
       - name: Build with PyInstaller
         run: |
