@@ -1,10 +1,11 @@
 import os
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer, QEvent
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QGridLayout, QHBoxLayout, QLabel,
-    QFileDialog, QAction, QMessageBox, QSlider, QProgressDialog
+    QFileDialog, QAction, QMessageBox, QSlider, QProgressDialog,
+    QApplication
 )
-from PyQt5.QtGui import QPixmap, QIcon, QWheelEvent
+from PyQt5.QtGui import QPixmap, QIcon
 
 from . import constants, generators, outputs, widgets, dialogs
 
@@ -42,6 +43,8 @@ class MyQMainWindow(QMainWindow):
 
         self.player_label = QLabel()
         self.player_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.player_label.installEventFilter(self)
+        self.player_label.setMouseTracking(True)
 
         self.player = outputs.Player(
             binary_waterfall=self.bw,
@@ -245,6 +248,12 @@ class MyQMainWindow(QMainWindow):
         # Set window to content size
         self.resize_window()
 
+    def eventFilter(self, obj, event):
+        if obj is self.player_label and event.type() == QEvent.Wheel:
+            self.wheelEvent(event)
+            return True
+        return super().eventFilter(obj, event)
+
     def keyPressEvent(self, event):
         key = event.key()
         modifiers = event.modifiers()
@@ -276,7 +285,7 @@ class MyQMainWindow(QMainWindow):
         elif key == Qt.Key_Period:
             self.player.frame_forward()
 
-    def wheelEvent(self, event: QWheelEvent):
+    def wheelEvent(self, event):
         if self.bw.filename is None:
             return
 
@@ -285,10 +294,36 @@ class MyQMainWindow(QMainWindow):
         if ms_per_row == 0:
             return
 
-        # angleDelta().y() is positive for scroll up, negative for scroll down
-        # One typical wheel step = 120 units
+        # Detect scroll direction and speed
+        # angleDelta() is the standard wheel step (120 = 1 notch)
+        # pixelDelta() is used on macOS trackpad for smooth scrolling
         delta = event.angleDelta().y()
-        rows = delta / 120  # Each wheel step = 1 row
+        pixel_delta = event.pixelDelta().y()
+
+        if delta == 0 and pixel_delta != 0:
+            # macOS trackpad / smooth scrolling: use pixelDelta
+            # Convert pixel movement to approximate "step" count
+            # 20 pixels ≈ 1 wheel notch
+            steps = pixel_delta / 20
+        else:
+            # Mouse wheel: 120 = 1 notch
+            steps = delta / 120
+
+        direction = 1 if steps > 0 else (-1 if steps < 0 else 0)
+
+        # Ctrl/Cmd + wheel: precise scrolling — exactly 1 pixel row per scroll event
+        # No modifier (plain scroll): accelerated scrolling, more rows when scrolling faster
+        # On macOS: Command(⌘)=ControlModifier, Control(^)=MetaModifier
+        modifiers = QApplication.keyboardModifiers()
+        if (modifiers & Qt.ControlModifier) or (modifiers & Qt.MetaModifier):
+            # With modifier: always exactly 1 pixel row per scroll event
+            row_count = 1
+        else:
+            # Plain scroll: accelerated, more rows when scrolling faster
+            # e.g. slow=1, medium=3, fast=5 rows per scroll
+            row_count = max(1, int(abs(steps) * 5))
+
+        rows = direction * row_count
 
         # Scroll up = go forward, scroll down = go backward
         ms_delta = round(rows * ms_per_row)
