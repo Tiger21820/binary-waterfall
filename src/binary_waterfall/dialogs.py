@@ -1010,10 +1010,13 @@ class About(QDialog):
         self.icon_label.setFixedSize(self.icon_size, self.icon_size)
 
         self.about_text = QLabel(
-            f"{constants.TITLE} v{constants.VERSION}\nby {constants.COPYRIGHT}\n© Copyright 2023\n\n"
+            f"{constants.TITLE} v{constants.VERSION}\n\n"
+            f"Upstream by Ella Jameson (nimaid)\n"
+            f"by {constants.COPYRIGHT}\n"
+            f"© Copyright 2026\n\n"
             f"{constants.DESCRIPTION}\n\n"
-            f"Project Home Page:\n{constants.PROJECT_URL}\n\n"
-            f"Donate:\n{constants.DONATE_URL}")
+            f"Upstream Project Home Page:\n{constants.PROJECT_URL}\n\n"
+            f"Project Home Page:\nhttps://github.com/Jack-Huang-2020/binary-waterfall")
         self.about_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.confirm_buttons = QDialogButtonBox(QDialogButtonBox.Ok)

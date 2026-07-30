@@ -330,7 +330,7 @@ jobs:
           # .desktop file
           printf '%s\n' \
             '[Desktop Entry]' \
-            'Name=Binary Waterfall' \
+            'Name=Binary Waterfall Revived' \
             'Comment=A Raw Data Media Player' \
             'Exec=binary-waterfall' \
             'Icon=binary-waterfall' \

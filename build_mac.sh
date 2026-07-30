@@ -5,6 +5,7 @@
 set -e
 
 MAIN_NAME="binary-waterfall"
+PROCESS_NAME="Binary Waterfall Revived"
 MODULE_NAME="binary_waterfall"
 ORIG_DIR="$(cd "$(dirname "$0")" && pwd)"
 SOURCEDIR="$ORIG_DIR/src/$MODULE_NAME"
