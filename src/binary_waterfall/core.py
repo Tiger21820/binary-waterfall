@@ -1,6 +1,7 @@
 import os
+import signal
 import sys
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtGui import QPalette, QColor
 
@@ -68,4 +69,6 @@ def main(args):
 
 
 def run():
+    # Handle Ctrl+C gracefully without traceback
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
     main(sys.argv)
