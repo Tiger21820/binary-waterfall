@@ -655,6 +655,19 @@ class BinaryWaterfall:
         elif len(result) < full_length:
             result += b'\x00' * (full_length - len(result))
 
+        # Playhead (applied on CPU after GPU conversion)
+        if self.playhead_visible:
+            playhead_row = self.get_playhead_row()
+            row_size = self.width * 3
+            playhead_start = playhead_row * row_size
+            playhead_end = playhead_start + row_size
+            playhead = result[playhead_start:playhead_end]
+            ph_contrast = helpers.filter_rgb_bytes(playhead, helpers.pick_shade_from_luminance)
+            playhead = helpers.filter_rgb_bytes(playhead, helpers.invert)
+            playhead = helpers.filter_rgb_bytes(playhead, helpers.desaturate)
+            playhead = helpers.average_rgb_bytes(playhead, ph_contrast)
+            result = result[:playhead_start] + playhead + result[playhead_end:]
+
         return result
 
     # A PIL Image (RGB)
