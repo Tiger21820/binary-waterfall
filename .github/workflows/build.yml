@@ -1,0 +1,388 @@
+name: Build
+on:
+  push:
+    branches: [ "main", "master" ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+    inputs:
+      upload_artifact:
+        description: 'Upload build artifacts'
+        type: boolean
+        default: true
+
+env:
+  MAIN_NAME: binary-waterfall
+  PYTHON_VERSION: '3.10'
+
+jobs:
+  build-windows:
+    name: Build Windows EXE
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install FFmpeg
+        run: choco install ffmpeg -y
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip wheel setuptools
+          pip install pyinstaller pyinstaller-versionfile
+          pip install -e .
+
+      - name: Create version file info
+        run: |
+          create-version-file src/binary_waterfall/version.yml --outfile file_version_info.txt
+
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller --clean --noconfirm --noconsole `
+            --add-data "src/binary_waterfall/*.py;./src/binary_waterfall" `
+            --add-data "src/binary_waterfall/version.yml;./src/binary_waterfall" `
+            --add-data "src/binary_waterfall/constants/*.py;./src/binary_waterfall/constants" `
+            --add-data "src/binary_waterfall/helpers/*.py;./src/binary_waterfall/helpers" `
+            --add-data "src/binary_waterfall/resources/*;./src/binary_waterfall/resources" `
+            --collect-all "imageio" `
+            --collect-all "moviepy" `
+            --collect-all "PIL" `
+            --collect-all "pydub" `
+            --collect-all "yaml" `
+            --collect-all "proglog" `
+            --copy-metadata "imageio" `
+            --copy-metadata "moviepy" `
+            --copy-metadata "Pillow" `
+            --copy-metadata "pydub" `
+            --copy-metadata "PyYAML" `
+            --copy-metadata "proglog" `
+            --hidden-import "imageio" `
+            --hidden-import "imageio.plugins.ffmpeg" `
+            --onefile `
+            --icon="src/binary_waterfall/resources/icon.ico" `
+            --splash="src/binary_waterfall/resources/splash.jpg" `
+            --version-file="file_version_info.txt" `
+            --name "${{ env.MAIN_NAME }}" `
+            "binary-waterfall.py"
+
+      - name: Rename executable
+        run: Move-Item -Path "dist/${{ env.MAIN_NAME }}.exe" -Destination "${{ env.MAIN_NAME }}-windows-x86_64.exe" -Force
+
+      - name: Upload artifact (Windows)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.MAIN_NAME }}-windows-x86_64
+          path: ${{ env.MAIN_NAME }}-windows-x86_64.exe
+
+  build-macos:
+    name: Build macOS App (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            runner: macos-13
+          - arch: arm64
+            runner: macos-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install FFmpeg
+        run: |
+          brew install ffmpeg
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip wheel setuptools
+          pip install pyinstaller pyinstaller-versionfile
+          pip install -e .
+
+      - name: Generate macOS .icns icon
+        run: |
+          # Generate .icns from the existing icon.png
+          ICON_PNG="src/binary_waterfall/resources/icon.png"
+          ICONSET_DIR="/tmp/AppIcon.iconset"
+          mkdir -p "$ICONSET_DIR"
+
+          # Generate all required sizes
+          for size in 16 32 64 128 256 512 1024; do
+            sips -z $size $size "$ICON_PNG" --out "$ICONSET_DIR/icon_${size}x${size}.png" 2>/dev/null || true
+            if [ $size -le 512 ]; then
+              half=$((size * 2))
+              sips -z $half $half "$ICON_PNG" --out "$ICONSET_DIR/icon_${size}x${size}@2x.png" 2>/dev/null || true
+            fi
+          done
+
+          # Create .icns using iconutil
+          ICON_ICNS="src/binary_waterfall/resources/icon.icns"
+          iconutil -c icns "$ICONSET_DIR" -o "$ICON_ICNS"
+          echo "Generated .icns icon at $ICON_ICNS"
+
+      - name: Build with PyInstaller
+        run: |
+          # Exclude unused Qt modules and PIL plugins to reduce bundle size
+          EXCLUDES=(
+            "PyQt5.QtQml" "PyQt5.QtQuick" "PyQt5.QtQuick3D"
+            "PyQt5.QtDBus" "PyQt5.QtWebSockets" "PyQt5.QtWebEngineWidgets"
+            "PyQt5.QtOpenGL" "PyQt5.QtOpenGLFunctions" "PyQt5.QtPrintSupport"
+            "PyQt5.QtXml" "PyQt5.QtXmlPatterns" "PyQt5.QtTest"
+            "PyQt5.QtHelp" "PyQt5.QtDesigner" "PyQt5.QtSql"
+            "PyQt5.QtBluetooth" "PyQt5.QtNfc" "PyQt5.QtPositioning"
+            "PyQt5.QtLocation" "PyQt5.QtSensors" "PyQt5.QtSerialPort"
+            "PyQt5.QtContacts" "PyQt5.QtOrganizer" "PyQt5.QtFeedback"
+            "PIL.SpiderImagePlugin" "PIL.FpxImagePlugin" "PIL.MicImagePlugin"
+            "PIL.MpegImagePlugin" "PIL.DcxImagePlugin" "PIL.PcdImagePlugin"
+            "PIL.PcxImagePlugin" "PIL.IptcImagePlugin" "PIL.XbmImagePlugin"
+            "PIL.XpmImagePlugin" "PIL.WalImageFile" "PIL.BufrStubImagePlugin"
+            "PIL.FitsStubImagePlugin" "PIL.GribStubImagePlugin" "PIL.Hdf5StubImagePlugin"
+            "PIL.MpoImagePlugin" "PIL.FtexImagePlugin" "PIL.PalmImagePlugin"
+            "PIL.PdfImagePlugin" "PIL.FliImagePlugin" "PIL.GimpPaletteFile"
+            "PIL.GimpGradientFile" "PIL.GbrImagePlugin" "PIL.GifImagePlugin"
+            "PIL.ImtImagePlugin" "PIL.IcoImagePlugin" "PIL.CurImagePlugin"
+            "PIL.SgiImagePlugin" "PIL.SunImagePlugin" "PIL.PpmImagePlugin"
+            "PIL.PsdImagePlugin" "PIL.TgaImagePlugin" "PIL.MspImagePlugin"
+            "PIL.IcnsImagePlugin" "PIL.DdsImagePlugin" "PIL.BlpImagePlugin"
+            "PIL.DibImagePlugin" "PIL.EpsImagePlugin" "PIL.ImImagePlugin"
+            "PIL.McIdasImagePlugin" "PIL.PixarImagePlugin" "PIL.PointImagePlugin"
+            "PIL.PngImagePlugin" "PIL.JpegImagePlugin"
+          )
+          EXCLUDE_ARGS=()
+          for mod in "${EXCLUDES[@]}"; do
+            EXCLUDE_ARGS+=("--exclude-module" "$mod")
+          done
+
+          pyinstaller --clean --noconfirm --windowed \
+            --add-data "src/binary_waterfall/*.py:./src/binary_waterfall" \
+            --add-data "src/binary_waterfall/version.yml:./src/binary_waterfall" \
+            --add-data "src/binary_waterfall/constants/*.py:./src/binary_waterfall/constants" \
+            --add-data "src/binary_waterfall/helpers/*.py:./src/binary_waterfall/helpers" \
+            --add-data "src/binary_waterfall/resources/*:./src/binary_waterfall/resources" \
+            --collect-all "imageio" \
+            --collect-all "moviepy" \
+            --collect-all "PIL" \
+            --collect-all "pydub" \
+            --collect-all "yaml" \
+            --collect-all "proglog" \
+            --copy-metadata "imageio" \
+            --copy-metadata "moviepy" \
+            --copy-metadata "Pillow" \
+            --copy-metadata "pydub" \
+            --copy-metadata "PyYAML" \
+            --copy-metadata "proglog" \
+            --hidden-import "imageio" \
+            --hidden-import "PIL._tkinter_finder" \
+            "${EXCLUDE_ARGS[@]}" \
+            --onedir \
+            --icon="src/binary_waterfall/resources/icon.icns" \
+            --osx-bundle-identifier="com.nimaid.binary-waterfall" \
+            --name "${{ env.MAIN_NAME }}" \
+            "binary-waterfall.py"
+
+      - name: Rename app bundle
+        run: |
+          if [ -d "dist/${{ env.MAIN_NAME }}.app" ]; then
+            mv "dist/${{ env.MAIN_NAME }}.app" "${{ env.MAIN_NAME }}-macos-${{ matrix.arch }}.app"
+            echo "Success: .app bundle created for ${{ matrix.arch }}"
+          else
+            echo "ERROR: Could not find built app bundle"
+            ls -la dist/ 2>/dev/null || echo "dist/ directory not found"
+            exit 1
+          fi
+
+      - name: Ad-hoc code sign (required for Finder launch)
+        run: |
+          codesign --force --deep --sign - "${{ env.MAIN_NAME }}-macos-${{ matrix.arch }}.app" && \
+            echo "Signed ad-hoc: ${{ env.MAIN_NAME }}-macos-${{ matrix.arch }}.app"
+
+      - name: Upload artifact (macOS ${{ matrix.arch }})
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.MAIN_NAME }}-macos-${{ matrix.arch }}
+          path: ${{ env.MAIN_NAME }}-macos-${{ matrix.arch }}.app
+
+  build-linux:
+    name: Build Linux AppImage
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip wheel setuptools
+          pip install pyinstaller
+          pip install -e .
+
+      - name: Build with PyInstaller
+        run: |
+          # Exclude unused Qt modules and PIL plugins
+          EXCLUDES=(
+            "PyQt5.QtQml" "PyQt5.QtQuick" "PyQt5.QtQuick3D"
+            "PyQt5.QtDBus" "PyQt5.QtWebSockets" "PyQt5.QtWebEngineWidgets"
+            "PyQt5.QtOpenGL" "PyQt5.QtOpenGLFunctions" "PyQt5.QtPrintSupport"
+            "PyQt5.QtXml" "PyQt5.QtXmlPatterns" "PyQt5.QtTest"
+            "PyQt5.QtHelp" "PyQt5.QtDesigner" "PyQt5.QtSql"
+            "PyQt5.QtBluetooth" "PyQt5.QtNfc" "PyQt5.QtPositioning"
+            "PyQt5.QtLocation" "PyQt5.QtSensors" "PyQt5.QtSerialPort"
+            "PyQt5.QtContacts" "PyQt5.QtOrganizer" "PyQt5.QtFeedback"
+            "PIL.SpiderImagePlugin" "PIL.FpxImagePlugin" "PIL.MicImagePlugin"
+            "PIL.MpegImagePlugin" "PIL.DcxImagePlugin" "PIL.PcdImagePlugin"
+            "PIL.PcxImagePlugin" "PIL.IptcImagePlugin" "PIL.XbmImagePlugin"
+            "PIL.XpmImagePlugin" "PIL.WalImageFile" "PIL.BufrStubImagePlugin"
+            "PIL.FitsStubImagePlugin" "PIL.GribStubImagePlugin" "PIL.Hdf5StubImagePlugin"
+            "PIL.MpoImagePlugin" "PIL.FtexImagePlugin" "PIL.PalmImagePlugin"
+            "PIL.PdfImagePlugin" "PIL.FliImagePlugin" "PIL.GimpPaletteFile"
+            "PIL.GimpGradientFile" "PIL.GbrImagePlugin" "PIL.GifImagePlugin"
+            "PIL.ImtImagePlugin" "PIL.IcoImagePlugin" "PIL.CurImagePlugin"
+            "PIL.SgiImagePlugin" "PIL.SunImagePlugin" "PIL.PpmImagePlugin"
+            "PIL.PsdImagePlugin" "PIL.TgaImagePlugin" "PIL.MspImagePlugin"
+            "PIL.IcnsImagePlugin" "PIL.DdsImagePlugin" "PIL.BlpImagePlugin"
+            "PIL.DibImagePlugin" "PIL.EpsImagePlugin" "PIL.ImImagePlugin"
+            "PIL.McIdasImagePlugin" "PIL.PixarImagePlugin" "PIL.PointImagePlugin"
+            "PIL.PngImagePlugin" "PIL.JpegImagePlugin"
+          )
+          EXCLUDE_ARGS=()
+          for mod in "${EXCLUDES[@]}"; do
+            EXCLUDE_ARGS+=("--exclude-module" "$mod")
+          done
+
+          pyinstaller --clean --noconfirm --noconsole \
+            --add-data "src/binary_waterfall/*.py:./src/binary_waterfall" \
+            --add-data "src/binary_waterfall/version.yml:./src/binary_waterfall" \
+            --add-data "src/binary_waterfall/constants/*.py:./src/binary_waterfall/constants" \
+            --add-data "src/binary_waterfall/helpers/*.py:./src/binary_waterfall/helpers" \
+            --add-data "src/binary_waterfall/resources/*:./src/binary_waterfall/resources" \
+            --collect-all "imageio" \
+            --collect-all "moviepy" \
+            --collect-all "PIL" \
+            --collect-all "pydub" \
+            --collect-all "yaml" \
+            --collect-all "proglog" \
+            --copy-metadata "imageio" \
+            --copy-metadata "moviepy" \
+            --copy-metadata "Pillow" \
+            --copy-metadata "pydub" \
+            --copy-metadata "PyYAML" \
+            --copy-metadata "proglog" \
+            --hidden-import "imageio" \
+            --hidden-import "PIL._tkinter_finder" \
+            "${EXCLUDE_ARGS[@]}" \
+            --onedir \
+            --icon="src/binary_waterfall/resources/icon.png" \
+            --name "${{ env.MAIN_NAME }}" \
+            "binary-waterfall.py"
+
+      - name: Prepare AppDir
+        run: |
+          BUILDDIR="dist/${{ env.MAIN_NAME }}"
+          APPDIR="${{ env.MAIN_NAME }}.AppDir"
+          mkdir -p "$APPDIR/usr/bin" "$APPDIR/usr/share/applications" "$APPDIR/usr/share/icons/hicolor/256x256/apps"
+          cp -r "$BUILDDIR"/* "$APPDIR/usr/bin/"
+          cp "src/binary_waterfall/resources/icon.png" "$APPDIR/usr/share/icons/hicolor/256x256/apps/binary-waterfall.png"
+
+          # AppRun entry point - write with printf to avoid heredoc indentation issues
+          printf '%s\n' \
+            '#!/bin/bash' \
+            'HERE="$(dirname "$(readlink -f "$0")")"' \
+            'export PATH="${HERE}/usr/bin:$PATH"' \
+            'export LD_LIBRARY_PATH="${HERE}/usr/bin/lib:$LD_LIBRARY_PATH"' \
+            'exec "${HERE}/usr/bin/binary-waterfall" "$@"' > "$APPDIR/AppRun"
+          chmod +x "$APPDIR/AppRun"
+
+          # .desktop file
+          printf '%s\n' \
+            '[Desktop Entry]' \
+            'Name=Binary Waterfall' \
+            'Comment=A Raw Data Media Player' \
+            'Exec=binary-waterfall' \
+            'Icon=binary-waterfall' \
+            'Terminal=false' \
+            'Type=Application' \
+            'Categories=AudioVideo;Player;' > "$APPDIR/binary-waterfall.desktop"
+
+          ln -sf "usr/share/icons/hicolor/256x256/apps/binary-waterfall.png" "$APPDIR/binary-waterfall.png"
+          echo "AppDir prepared at: $APPDIR"
+
+      - name: Install appimagetool
+        run: |
+          sudo apt-get install -y -qq libfuse2
+          wget -q "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage" -O /tmp/appimagetool
+          chmod +x /tmp/appimagetool
+          cd /tmp && ./appimagetool --appimage-extract 2>/dev/null || /tmp/appimagetool --appimage-extract
+          echo "APPIMAGETOOL=/tmp/squashfs-root/AppRun" >> "$GITHUB_ENV"
+
+      - name: Build AppImage
+        run: |
+          ARCH=x86_64 ${{ env.APPIMAGETOOL }} "${{ env.MAIN_NAME }}.AppDir" "${{ env.MAIN_NAME }}-linux-x86_64.AppImage"
+
+      - name: Upload artifact (Linux)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.MAIN_NAME }}-linux-x86_64
+          path: ${{ env.MAIN_NAME }}-linux-x86_64.AppImage
+
+  create-release:
+    name: Create GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build-windows, build-macos, build-linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Binary Waterfall ${{ github.ref_name }}
+          body: |
+            ## Binary Waterfall ${{ github.ref_name }}
+
+            ### Downloads:
+            - **Windows (x86_64)**: `binary-waterfall-windows-x86_64.exe`
+            - **macOS (Intel)**: `binary-waterfall-macos-x86_64.app`
+            - **macOS (Apple Silicon)**: `binary-waterfall-macos-arm64.app`
+            - **Linux (x86_64)**: `binary-waterfall-linux-x86_64.AppImage`
+
+            ### Installation
+            - **Windows**: Download the `.exe` file and run it directly.
+            - **macOS (Intel)**: Download the `macos-x86_64` bundle, right-click and select "Open" to bypass Gatekeeper (first launch only).
+            - **macOS (Apple Silicon)**: Download the `macos-arm64` bundle, right-click and select "Open" to bypass Gatekeeper (first launch only).
+            - **Linux**: Download the `.AppImage` file, `chmod +x` it, and run it directly.
+          files: |
+            binary-waterfall-*/
+            !binary-waterfall-*/*.py
+          fail_on_unmatched_files: false

@@ -151,7 +151,11 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
+# macOS
+.DS_Store
 *.exe
+*.icns
+*.app
 
 .idea/*
 file_version_info.txt
