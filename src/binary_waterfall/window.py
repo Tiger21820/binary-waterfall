@@ -254,6 +254,9 @@ class MyQMainWindow(QMainWindow):
 
         self.set_volume(self.current_volume)
 
+        # Enable drag and drop on the main window
+        self.setAcceptDrops(True)
+
         # Set window to content size
         self.resize_window()
 
@@ -261,7 +264,36 @@ class MyQMainWindow(QMainWindow):
         if obj is self.player_label and event.type() == QEvent.Wheel:
             self.wheelEvent(event)
             return True
+        if obj is self.player_label and event.type() == QEvent.DragEnter:
+            self.dragEnterEvent(event)
+            return True
+        if obj is self.player_label and event.type() == QEvent.Drop:
+            self.dropEvent(event)
+            return True
         return super().eventFilter(obj, event)
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls():
+            urls = event.mimeData().urls()
+            if len(urls) == 1:
+                url = urls[0]
+                if url.isLocalFile():
+                    event.acceptProposedAction()
+                    return
+        event.ignore()
+
+    def dropEvent(self, event):
+        if event.mimeData().hasUrls():
+            urls = event.mimeData().urls()
+            if len(urls) == 1:
+                url = urls[0]
+                if url.isLocalFile():
+                    filename = url.toLocalFile()
+                    if os.path.isfile(filename):
+                        self.open_file_by_path(filename)
+                        event.acceptProposedAction()
+                        return
+        event.ignore()
 
     def keyPressEvent(self, event):
         key = event.key()
