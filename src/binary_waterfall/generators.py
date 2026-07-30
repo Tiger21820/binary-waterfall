@@ -282,6 +282,13 @@ class BinaryWaterfall:
     def set_alignment(self, alignment):
         self.alignment = alignment
 
+    def get_ms_per_row(self):
+        if self.filename is None or self.audio_length_ms is None:
+            return 0
+        address_block_size = self.width * self.color_bytes
+        total_blocks = math.ceil(self.total_bytes / address_block_size)
+        return self.audio_length_ms / total_blocks
+
     def set_playhead_visible(self, playhead_visible):
         self.playhead_visible = playhead_visible
 

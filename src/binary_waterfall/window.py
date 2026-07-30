@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QGridLayout, QHBoxLayout, QLabel,
     QFileDialog, QAction, QMessageBox, QSlider, QProgressDialog
 )
-from PyQt5.QtGui import QPixmap, QIcon
+from PyQt5.QtGui import QPixmap, QIcon, QWheelEvent
 
 from . import constants, generators, outputs, widgets, dialogs
 
@@ -247,13 +247,20 @@ class MyQMainWindow(QMainWindow):
 
     def keyPressEvent(self, event):
         key = event.key()
+        modifiers = event.modifiers()
 
-        if key == Qt.Key_Space:
+        # Ctrl/Cmd + O: Open file
+        if modifiers & Qt.ControlModifier and key == Qt.Key_O:
+            self.open_file_clicked()
+        # Ctrl/Cmd + W: Close file
+        elif modifiers & Qt.ControlModifier and key == Qt.Key_W:
+            self.close_file_clicked()
+        elif key == Qt.Key_Space:
             self.play_clicked()
         elif key == Qt.Key_Left:
-            self.back_clicked()
+            self.player.back(ms=15000)
         elif key == Qt.Key_Right:
-            self.forward_clicked()
+            self.player.forward(ms=15000)
         elif key == Qt.Key_Up:
             new_volume = min(self.current_volume + 5, 100)
             self.set_volume(new_volume)
@@ -268,6 +275,27 @@ class MyQMainWindow(QMainWindow):
             self.player.frame_back()
         elif key == Qt.Key_Period:
             self.player.frame_forward()
+
+    def wheelEvent(self, event: QWheelEvent):
+        if self.bw.filename is None:
+            return
+
+        # Get ms per pixel row
+        ms_per_row = self.bw.get_ms_per_row()
+        if ms_per_row == 0:
+            return
+
+        # angleDelta().y() is positive for scroll up, negative for scroll down
+        # One typical wheel step = 120 units
+        delta = event.angleDelta().y()
+        rows = delta / 120  # Each wheel step = 1 row
+
+        # Scroll up = go forward, scroll down = go backward
+        ms_delta = round(rows * ms_per_row)
+        current_pos = self.player.get_position()
+        self.player.set_position(current_pos + ms_delta)
+
+        event.accept()
 
     def resize_window(self):
         # First, make largest elements smaller
