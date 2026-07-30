@@ -1,9 +1,9 @@
 import os
-from PyQt5.QtCore import Qt, QTimer, QEvent
+from PyQt5.QtCore import Qt, QTimer, QEvent, QSettings
 from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QGridLayout, QHBoxLayout, QLabel,
     QFileDialog, QAction, QMessageBox, QSlider, QProgressDialog,
-    QApplication
+    QApplication, QMenu
 )
 from PyQt5.QtGui import QPixmap, QIcon
 
@@ -199,6 +199,15 @@ class MyQMainWindow(QMainWindow):
         self.file_menu_close.setEnabled(False)
         self.file_menu_close.triggered.connect(self.close_file_clicked)
         self.file_menu.addAction(self.file_menu_close)
+
+        self.file_menu.addSeparator()
+
+        self.recent_menu = self.file_menu.addMenu("Recent Files")
+        self.recent_files = []
+        self.max_recent = 10
+        self.settings = QSettings("BinaryWaterfall", "BinaryWaterfall")
+        self.load_recent_files()
+        self.populate_recent_menu()
 
         self.settings_menu = self.main_menu.addMenu("Settings")
 
@@ -449,6 +458,85 @@ class MyQMainWindow(QMainWindow):
         else:
             self.file_savename = name
 
+    def load_recent_files(self):
+        size = self.settings.beginReadArray("recent_files")
+        self.recent_files = []
+        for i in range(size):
+            self.settings.setArrayIndex(i)
+            fname = self.settings.value("file")
+            if fname and os.path.isfile(fname):
+                self.recent_files.append(fname)
+        self.settings.endArray()
+
+    def save_recent_files(self):
+        self.settings.beginWriteArray("recent_files")
+        for i, fname in enumerate(self.recent_files[:self.max_recent]):
+            self.settings.setArrayIndex(i)
+            self.settings.setValue("file", fname)
+        self.settings.endArray()
+
+    def add_recent_file(self, filename):
+        if filename in self.recent_files:
+            self.recent_files.remove(filename)
+        self.recent_files.insert(0, filename)
+        self.recent_files = self.recent_files[:self.max_recent]
+        self.save_recent_files()
+        self.populate_recent_menu()
+
+    def populate_recent_menu(self):
+        self.recent_menu.clear()
+        if not self.recent_files:
+            action = self.recent_menu.addAction("(Empty)")
+            action.setEnabled(False)
+            return
+        for fname in self.recent_files:
+            # Show just the file name, tooltip shows full path
+            display_name = os.path.basename(fname)
+            action = self.recent_menu.addAction(display_name)
+            action.setToolTip(fname)
+            action.setData(fname)
+            action.triggered.connect(self.recent_file_clicked)
+        self.recent_menu.addSeparator()
+        clear_action = self.recent_menu.addAction("Clear Recent Files")
+        clear_action.triggered.connect(self.clear_recent_files)
+
+    def clear_recent_files(self):
+        self.recent_files = []
+        self.save_recent_files()
+        self.populate_recent_menu()
+
+    def recent_file_clicked(self):
+        action = self.sender()
+        if action:
+            filename = action.data()
+            if filename and os.path.isfile(filename):
+                self.open_file_by_path(filename)
+            else:
+                # File no longer exists, remove from list
+                if filename in self.recent_files:
+                    self.recent_files.remove(filename)
+                    self.save_recent_files()
+                    self.populate_recent_menu()
+
+    def open_file_by_path(self, filename):
+        self.pause_player()
+
+        self.player.open_file(filename=filename)
+
+        file_path, file_title = os.path.split(filename)
+        file_savename, file_ext = os.path.splitext(file_title)
+        self.set_file_savename(file_savename)
+        self.setWindowTitle(f"{constants.TITLE} | {file_title}")
+
+        self.last_load_location = filename
+
+        self.update_seekbar()
+
+        self.export_menu.setEnabled(True)
+        self.file_menu_close.setEnabled(True)
+
+        self.add_recent_file(filename)
+
     def open_file_clicked(self):
         self.pause_player()
 
@@ -460,19 +548,7 @@ class MyQMainWindow(QMainWindow):
         )
 
         if filename != "":
-            self.player.open_file(filename=filename)
-
-            file_path, file_title = os.path.split(filename)
-            file_savename, file_ext = os.path.splitext(file_title)
-            self.set_file_savename(file_savename)
-            self.setWindowTitle(f"{constants.TITLE} | {file_title}")
-
-            self.last_load_location = filename
-
-            self.update_seekbar()
-
-            self.export_menu.setEnabled(True)
-            self.file_menu_close.setEnabled(True)
+            self.open_file_by_path(filename)
 
     def close_file_clicked(self):
         self.pause_player()
