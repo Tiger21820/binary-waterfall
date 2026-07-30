@@ -1,5 +1,8 @@
 import os
+import sys
 import webbrowser
+import datetime
+import platform
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import (
     QGridLayout, QLabel, QPushButton, QDialog, QDialogButtonBox, QComboBox, QLineEdit, QCheckBox, QSpinBox,
@@ -1014,6 +1017,29 @@ class About(QDialog):
         self.icon_label.setScaledContents(True)
         self.icon_label.setFixedSize(self.icon_size, self.icon_size)
 
+        # Build info
+        try:
+            build_time = os.environ.get('BINARY_WATERFALL_BUILD_TIME', '')
+            if not build_time:
+                build_time = datetime.datetime.fromtimestamp(
+                    os.path.getmtime(__file__)).strftime('%Y-%m-%d %H:%M:%S')
+            build_os = os.environ.get('BINARY_WATERFALL_BUILD_OS', '')
+            if not build_os:
+                # Fallback for local runs — CI already provides OS + kernel version
+                system = platform.system()
+                kernel_version = platform.release()
+                if system == 'Darwin':
+                    build_os = f'macOS {kernel_version}'
+                elif system == 'Linux':
+                    build_os = f'Linux {kernel_version}'
+                elif system == 'Windows':
+                    build_os = f'Windows {kernel_version}'
+                else:
+                    build_os = f'{system} {kernel_version}'
+            build_info = f"Built: {build_time} | {build_os}"
+        except Exception:
+            build_info = ""
+
         self.about_text = QLabel(
             f"{constants.TITLE} v{constants.VERSION}\n\n"
             f"Upstream by Ella Jameson (nimaid)\n"
@@ -1021,7 +1047,8 @@ class About(QDialog):
             f"© Copyright 2026\n\n"
             f"{constants.DESCRIPTION}\n\n"
             f"Upstream Project Home Page:\n{constants.PROJECT_URL}\n\n"
-            f"Project Home Page:\nhttps://github.com/Jack-Huang-2020/binary-waterfall")
+            f"Project Home Page:\nhttps://github.com/Jack-Huang-2020/binary-waterfall\n\n"
+            f"{build_info}")
         self.about_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.confirm_buttons = QDialogButtonBox(QDialogButtonBox.Ok)

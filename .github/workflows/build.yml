@@ -49,6 +49,13 @@ jobs:
           Set-Content -Path "src/binary_waterfall/version_clean.yml" -Value $content -Encoding ASCII
           create-version-file src/binary_waterfall/version_clean.yml --outfile file_version_info.txt
 
+      - name: Set build info for About dialog
+        run: |
+          $time = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss')
+          $kernel = (Get-CimInstance Win32_OperatingSystem).Version
+          echo "BINARY_WATERFALL_BUILD_TIME=$time" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "BINARY_WATERFALL_BUILD_OS=Windows $kernel" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Build with PyInstaller
         run: |
           pyinstaller --clean --noconfirm --noconsole `
@@ -132,6 +139,11 @@ jobs:
           ICON_ICNS="src/binary_waterfall/resources/icon.icns"
           iconutil -c icns "$ICONSET_DIR" -o "$ICON_ICNS"
           echo "Generated .icns icon at $ICON_ICNS"
+
+      - name: Set build info for About dialog
+        run: |
+          echo "BINARY_WATERFALL_BUILD_TIME=$(date '+%Y-%m-%d %H:%M:%S')" >> $GITHUB_ENV
+          echo "BINARY_WATERFALL_BUILD_OS=macOS $(uname -r)" >> $GITHUB_ENV
 
       - name: Build with PyInstaller
         run: |
@@ -247,6 +259,11 @@ jobs:
           pip install pyinstaller
           pip install -e .
 
+      - name: Set build info for About dialog
+        run: |
+          echo "BINARY_WATERFALL_BUILD_TIME=$(date '+%Y-%m-%d %H:%M:%S')" >> $GITHUB_ENV
+          echo "BINARY_WATERFALL_BUILD_OS=Linux $(uname -r)" >> $GITHUB_ENV
+
       - name: Build with PyInstaller
         run: |
           # Exclude unused Qt modules and PIL plugins
@@ -357,7 +374,7 @@ jobs:
 
   create-release:
     name: Create GitHub Release
-    if: always() && !cancelled() && !failure()
+    if: startsWith(github.ref, 'refs/tags/v')
     needs: [build-windows, build-macos, build-linux]
     runs-on: ubuntu-latest
     permissions:
@@ -382,6 +399,7 @@ jobs:
             - **Windows**: Download the `.exe` file and run it directly.
             - **macOS**: Download the `.tar.gz` file, extract it, then right-click the `.app` and select "Open" to bypass Gatekeeper (first launch only).
             - **Linux**: Download the `.AppImage` file, `chmod +x` it, and run it directly.
+          prerelease: ${{ contains(github.ref_name, '-') }}
           files: |
             binary-waterfall-*/
             !binary-waterfall-*/*.py
