@@ -4,7 +4,7 @@ import math
 import time
 import tempfile
 import pydub
-from moviepy.editor import ImageSequenceClip, AudioFileClip
+from moviepy import ImageSequenceClip, AudioFileClip
 from PIL import Image
 from PyQt5.QtCore import QUrl
 from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
