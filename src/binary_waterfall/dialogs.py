@@ -903,71 +903,72 @@ class HotkeysInfo(QDialog):
         # Hide "?" button
         self.setWindowFlags(self.windowFlags() ^ Qt.WindowContextHelpButtonHint)
 
+        self.open_label = QLabel("Open File:")
+        self.open_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
+        self.open_key_label = QLabel("⌃ / ⌘ + O")
+        self.open_key_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+
+        self.close_label = QLabel("Close File:")
+        self.close_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
+        self.close_key_label = QLabel("⌃ / ⌘ + W")
+        self.close_key_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+
         self.play_label = QLabel("Play / Pause:")
         self.play_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
-
         self.play_key_label = QLabel("Spacebar")
         self.play_key_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
 
-        self.forward_label = QLabel("Forward:")
-        self.forward_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
-
-        self.forward_key_label = QLabel("Right")
-        self.forward_key_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
-
-        self.back_label = QLabel("Back:")
-        self.back_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
-
-        self.back_key_label = QLabel("Left")
-        self.back_key_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
-
-        self.frame_forward_label = QLabel("Frame Forward:")
+        self.frame_forward_label = QLabel("Frame Forward / Right 15s:")
         self.frame_forward_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
-
-        self.frame_forward_key_label = QLabel(">")
+        self.frame_forward_key_label = QLabel("➡️ / .")
         self.frame_forward_key_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
 
-        self.frame_back_label = QLabel("Frame Back:")
+        self.frame_back_label = QLabel("Frame Back / Left 15s:")
         self.frame_back_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
-
-        self.frame_back_key_label = QLabel("<")
+        self.frame_back_key_label = QLabel("⬅️ / ,")
         self.frame_back_key_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
 
         self.restart_label = QLabel("Restart:")
         self.restart_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
-
         self.restart_key_label = QLabel("R")
         self.restart_key_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
 
         self.volume_up_label = QLabel("Volume Up:")
         self.volume_up_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
-
-        self.volume_up_key_label = QLabel("Up")
+        self.volume_up_key_label = QLabel("⬆️")
         self.volume_up_key_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
 
         self.volume_down_label = QLabel("Volume Down:")
         self.volume_down_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
-
-        self.volume_down_key_label = QLabel("Down")
+        self.volume_down_key_label = QLabel("⬇️")
         self.volume_down_key_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
 
         self.mute_label = QLabel("Mute:")
         self.mute_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
-
         self.mute_key_label = QLabel("M")
         self.mute_key_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+
+        self.scroll_label = QLabel("Scroll Up/Down:")
+        self.scroll_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
+        self.scroll_key_label = QLabel("Mouse Wheel (Fast)")
+        self.scroll_key_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+
+        self.scroll_mod_label = QLabel("Scroll (Precise):")
+        self.scroll_mod_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
+        self.scroll_mod_key_label = QLabel("⌃ / ⌘ + Wheel")
+        self.scroll_mod_key_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
 
         self.confirm_buttons = QDialogButtonBox(QDialogButtonBox.Ok)
         self.confirm_buttons.accepted.connect(self.accept)
 
         self.main_layout = QGridLayout()
 
-        self.main_layout.addWidget(self.play_label, 0, 0)
-        self.main_layout.addWidget(self.play_key_label, 0, 1)
-        self.main_layout.addWidget(self.back_label, 1, 0)
-        self.main_layout.addWidget(self.back_key_label, 1, 1)
-        self.main_layout.addWidget(self.forward_label, 2, 0)
-        self.main_layout.addWidget(self.forward_key_label, 2, 1)
+        self.main_layout.addWidget(self.open_label, 0, 0)
+        self.main_layout.addWidget(self.open_key_label, 0, 1)
+        self.main_layout.addWidget(self.close_label, 1, 0)
+        self.main_layout.addWidget(self.close_key_label, 1, 1)
+        self.main_layout.addWidget(self.play_label, 2, 0)
+        self.main_layout.addWidget(self.play_key_label, 2, 1)
         self.main_layout.addWidget(self.frame_back_label, 3, 0)
         self.main_layout.addWidget(self.frame_back_key_label, 3, 1)
         self.main_layout.addWidget(self.frame_forward_label, 4, 0)
@@ -980,7 +981,11 @@ class HotkeysInfo(QDialog):
         self.main_layout.addWidget(self.volume_down_key_label, 7, 1)
         self.main_layout.addWidget(self.mute_label, 8, 0)
         self.main_layout.addWidget(self.mute_key_label, 8, 1)
-        self.main_layout.addWidget(self.confirm_buttons, 9, 0, 1, 2)
+        self.main_layout.addWidget(self.scroll_label, 9, 0)
+        self.main_layout.addWidget(self.scroll_key_label, 9, 1)
+        self.main_layout.addWidget(self.scroll_mod_label, 10, 0)
+        self.main_layout.addWidget(self.scroll_mod_key_label, 10, 1)
+        self.main_layout.addWidget(self.confirm_buttons, 11, 0, 1, 2)
 
         self.setLayout(self.main_layout)
 
