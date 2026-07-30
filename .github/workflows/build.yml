@@ -88,15 +88,8 @@ jobs:
           path: ${{ env.MAIN_NAME }}-windows-x86_64.exe
 
   build-macos:
-    name: Build macOS App (${{ matrix.arch }})
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      matrix:
-        include:
-          - arch: x86_64
-            runner: macos-13
-          - arch: arm64
-            runner: macos-latest
+    name: Build macOS App (arm64)
+    runs-on: macos-latest
     defaults:
       run:
         shell: bash
@@ -203,8 +196,8 @@ jobs:
       - name: Rename app bundle
         run: |
           if [ -d "dist/${{ env.MAIN_NAME }}.app" ]; then
-            mv "dist/${{ env.MAIN_NAME }}.app" "${{ env.MAIN_NAME }}-macos-${{ matrix.arch }}.app"
-            echo "Success: .app bundle created for ${{ matrix.arch }}"
+            mv "dist/${{ env.MAIN_NAME }}.app" "${{ env.MAIN_NAME }}-macos-arm64.app"
+            echo "Success: .app bundle created for arm64"
           else
             echo "ERROR: Could not find built app bundle"
             ls -la dist/ 2>/dev/null || echo "dist/ directory not found"
@@ -213,20 +206,20 @@ jobs:
 
       - name: Ad-hoc code sign (required for Finder launch)
         run: |
-          codesign --force --deep --sign - "${{ env.MAIN_NAME }}-macos-${{ matrix.arch }}.app" && \
-            echo "Signed ad-hoc: ${{ env.MAIN_NAME }}-macos-${{ matrix.arch }}.app"
+          codesign --force --deep --sign - "${{ env.MAIN_NAME }}-macos-arm64.app" && \
+            echo "Signed ad-hoc: ${{ env.MAIN_NAME }}-macos-arm64.app"
 
       - name: Compress .app bundle
         run: |
           # Package as tar.gz so the .app bundle stays intact on download
-          tar czf "${{ env.MAIN_NAME }}-macos-${{ matrix.arch }}.tar.gz" "${{ env.MAIN_NAME }}-macos-${{ matrix.arch }}.app"
-          ls -lh "${{ env.MAIN_NAME }}-macos-${{ matrix.arch }}.tar.gz"
+          tar czf "${{ env.MAIN_NAME }}-macos-arm64.tar.gz" "${{ env.MAIN_NAME }}-macos-arm64.app"
+          ls -lh "${{ env.MAIN_NAME }}-macos-arm64.tar.gz"
 
-      - name: Upload artifact (macOS ${{ matrix.arch }})
+      - name: Upload artifact (macOS)
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.MAIN_NAME }}-macos-${{ matrix.arch }}
-          path: ${{ env.MAIN_NAME }}-macos-${{ matrix.arch }}.tar.gz
+          name: ${{ env.MAIN_NAME }}-macos-arm64
+          path: ${{ env.MAIN_NAME }}-macos-arm64.tar.gz
 
   build-linux:
     name: Build Linux AppImage
@@ -382,7 +375,6 @@ jobs:
 
             ### Downloads:
             - **Windows (x86_64)**: `binary-waterfall-windows-x86_64.exe`
-            - **macOS (Intel)**: `binary-waterfall-macos-x86_64.tar.gz`
             - **macOS (Apple Silicon)**: `binary-waterfall-macos-arm64.tar.gz`
             - **Linux (x86_64)**: `binary-waterfall-linux-x86_64.AppImage`
 
