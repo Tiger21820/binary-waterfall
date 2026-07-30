@@ -149,6 +149,64 @@ class AudioSettings(QDialog):
         self.setFixedSize(self.sizeHint())
 
 
+# About dialog
+#   Shows program info
+class About(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent=parent)
+        self.setWindowTitle(f"About {constants.TITLE}")
+        self.setWindowIcon(QIcon(constants.ICON_PATHS["program"]))
+        self.setWindowFlags(self.windowFlags() ^ Qt.WindowContextHelpButtonHint)
+
+        icon_pixmap = QPixmap(constants.ICON_PATHS["program"])
+        icon_label = QLabel()
+        icon_label.setPixmap(icon_pixmap.scaled(64, 64, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        title_label = QLabel(constants.TITLE)
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title_font = title_label.font()
+        title_font.setPointSize(16)
+        title_font.setBold(True)
+        title_label.setFont(title_font)
+
+        version_label = QLabel(f"Version {constants.VERSION}")
+        version_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        desc_label = QLabel(constants.DESCRIPTION)
+        desc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        desc_label.setWordWrap(True)
+
+        copyright_label = QLabel("import { Jack Huang } from '☘️';")
+        copyright_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        link_label = QLabel(
+            f'<a href="{constants.PROJECT_URL}" style="color: {constants.COLORS["link"]};">'
+            f'{constants.PROJECT_URL}</a>'
+        )
+        link_label.setTextFormat(Qt.RichText)
+        link_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        link_label.linkActivated.connect(lambda url: webbrowser.open(url))
+
+        confirm_buttons = QDialogButtonBox(QDialogButtonBox.Ok)
+        confirm_buttons.accepted.connect(self.accept)
+
+        main_layout = QGridLayout()
+        main_layout.setSpacing(10)
+        main_layout.setContentsMargins(24, 16, 24, 16)
+
+        main_layout.addWidget(icon_label, 0, 0, alignment=Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(title_label, 1, 0, alignment=Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(version_label, 2, 0, alignment=Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(desc_label, 3, 0, alignment=Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(copyright_label, 4, 0, alignment=Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(link_label, 5, 0, alignment=Qt.AlignmentFlag.AlignCenter)
+        main_layout.addWidget(confirm_buttons, 6, 0, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        self.setLayout(main_layout)
+        self.setFixedSize(self.sizeHint())
+
+
 # Video settings input window
 #   User interface to set the video settings (for computation)
 class VideoSettings(QDialog):
