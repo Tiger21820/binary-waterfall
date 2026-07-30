@@ -41,6 +41,7 @@ jobs:
           python -m pip install --upgrade pip wheel setuptools
           pip install pyinstaller pyinstaller-versionfile
           pip install -e .
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
 
       - name: Create version file info
         run: |
@@ -70,6 +71,8 @@ jobs:
             --collect-all "pydub" `
             --collect-all "yaml" `
             --collect-all "proglog" `
+            --collect-all "torch" `
+            --collect-all "torchvision" `
             --copy-metadata "imageio" `
             --copy-metadata "moviepy" `
             --copy-metadata "Pillow" `
@@ -118,6 +121,7 @@ jobs:
           python -m pip install --upgrade pip wheel setuptools
           pip install pyinstaller pyinstaller-versionfile
           pip install -e .
+          pip install torch torchvision
 
       - name: Generate macOS .icns icon
         run: |
@@ -190,6 +194,8 @@ jobs:
             --collect-all "pydub" \
             --collect-all "yaml" \
             --collect-all "proglog" \
+            --collect-all "torch" \
+            --collect-all "torchvision" \
             --copy-metadata "imageio" \
             --copy-metadata "moviepy" \
             --copy-metadata "Pillow" \
@@ -258,6 +264,7 @@ jobs:
           python -m pip install --upgrade pip wheel setuptools
           pip install pyinstaller
           pip install -e .
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
       - name: Set build info for About dialog
         run: |
@@ -309,6 +316,8 @@ jobs:
             --collect-all "pydub" \
             --collect-all "yaml" \
             --collect-all "proglog" \
+            --collect-all "torch" \
+            --collect-all "torchvision" \
             --copy-metadata "imageio" \
             --copy-metadata "moviepy" \
             --copy-metadata "Pillow" \
