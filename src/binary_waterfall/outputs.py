@@ -3,14 +3,82 @@ import shutil
 import math
 import time
 import tempfile
+from multiprocessing import Pool, cpu_count
 import pydub
 from moviepy import ImageSequenceClip, AudioFileClip
-from PIL import Image
+from PIL import Image, ImageOps
 from PyQt5.QtCore import QUrl
 from PyQt5.QtMultimedia import QMediaPlayer, QMediaContent
 from PyQt5.QtGui import QImage, QPixmap
 
 from . import generators, helpers, constants
+
+# Try to import GPU acceleration libraries
+_use_gpu = False
+_gpu_device = None
+try:
+    import torch
+    if torch.cuda.is_available():
+        _use_gpu = True
+        _gpu_device = torch.device('cuda')
+        print(f"[Binary Waterfall] GPU acceleration enabled: {torch.cuda.get_device_name(0)}")
+    elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+        _use_gpu = True
+        _gpu_device = torch.device('mps')
+        print(f"[Binary Waterfall] GPU acceleration enabled: Apple Silicon (MPS)")
+    else:
+        print("[Binary Waterfall] PyTorch available but no GPU found, using CPU multiprocessing")
+except ImportError:
+    pass
+except Exception:
+    pass
+
+
+def _render_frame_worker(args):
+    """Module-level worker function for multiprocessing pool.
+    Each worker process opens its own file handle independently."""
+    (filename, ms, audio_length_ms, width, height, color_format_str,
+     flip_v, flip_h, playhead_visible,
+     output_filename, size_params, keep_aspect, alignment) = args
+
+    # Build a temporary BinaryWaterfall in the worker process
+    # so all address calculations are correct
+    bw = generators.BinaryWaterfall()
+    bw.set_dims(width=width, height=height)
+    bw.set_color_format(color_format_str)
+    bw.set_flip(flip_v=flip_v, flip_h=flip_h)
+    bw.set_playhead_visible(playhead_visible)
+    bw.set_alignment(alignment)
+    bw.set_filename(filename)
+    # Set dummy audio so get_frame_image works
+    bw.set_audio_settings(num_channels=1, sample_bytes=1, sample_rate=32000, volume=100)
+    bw.audio_length_ms = audio_length_ms
+
+    try:
+        img = bw.get_frame_image(ms)
+    except Exception:
+        img = bw.get_frame_image(0)
+
+    try:
+        bw.cleanup()
+    except Exception:
+        pass
+
+    # Resize and save
+    source = img.convert("RGBA")
+    if size_params is not None:
+        w, h = size_params
+        if keep_aspect:
+            output_size = helpers.get_size_for_fit_frame(
+                content_size=source.size, frame_size=(w, h))["size"]
+        else:
+            output_size = (w, h)
+        source = helpers.fit_to_frame(
+            image=source, frame_size=output_size,
+            scaling=Image.NEAREST, transparent=False)
+
+    final = source.convert("RGB")
+    final.save(output_filename)
 
 
 # Image playback class
@@ -342,29 +410,49 @@ class Renderer:
         helpers.make_file_path(directory)
 
         frame_count = self.get_frame_count(fps)
-
         frame_number_digits = len(str(frame_count))
 
         if image_format is None:
             image_format = constants.ImageFormatCode.PNG
 
+        if self.bw.audio_filename is None:
+            return
+
+        # Get audio length for worker address calculation
+        audio_length_ms = self.bw.audio_length_ms or 60000
+
+        # Build work items for each frame
+        work_items = []
         for frame in range(frame_count):
             frame_number = str(frame).rjust(frame_number_digits, "0")
             frame_filename = os.path.join(directory, f"{frame_number}{image_format.value}")
             frame_ms = round((frame / fps) * 1000)
+            work_items.append((
+                self.bw.filename,
+                frame_ms,
+                audio_length_ms,
+                self.bw.width,
+                self.bw.height,
+                self.bw.get_color_format_string(),
+                self.bw.flip_v,
+                self.bw.flip_h,
+                self.bw.playhead_visible,
+                frame_filename,
+                (size[0], size[1]) if size else None,
+                keep_aspect,
+                self.bw.alignment
+            ))
 
-            if progress_dialog is not None:
-                progress_dialog.setValue(frame)
+        # Render in parallel using multiprocessing
+        num_workers = min(cpu_count() or 4, 8)
 
-                if progress_dialog.wasCanceled():
-                    return
-
-            self.export_frame(
-                ms=frame_ms,
-                filename=frame_filename,
-                size=size,
-                keep_aspect=keep_aspect
-            )
+        with Pool(processes=num_workers) as pool:
+            for i, _ in enumerate(pool.imap_unordered(_render_frame_worker, work_items)):
+                if progress_dialog is not None:
+                    progress_dialog.setValue(i + 1)
+                    if progress_dialog.wasCanceled():
+                        pool.terminate()
+                        return
 
         if progress_dialog is not None:
             progress_dialog.setValue(frame_count)

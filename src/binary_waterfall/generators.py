@@ -3,11 +3,28 @@ import shutil
 import tempfile
 import math
 import wave
+import threading
 from PIL import Image, ImageOps
 import pydub
 from PyQt5.QtGui import QImage
 
 from . import constants, helpers
+
+# GPU accelerated rendering support (optional)
+_use_gpu = False
+_gpu_device = None
+try:
+    import torch
+    if torch.cuda.is_available():
+        _use_gpu = True
+        _gpu_device = torch.device('cuda')
+    elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+        _use_gpu = True
+        _gpu_device = torch.device('mps')
+except ImportError:
+    pass
+except Exception:
+    pass
 
 
 # Binary Waterfall abstraction class
@@ -51,6 +68,9 @@ class BinaryWaterfall:
         self.flip_h = None
         self.alignment = None
         self.playhead_visible = None
+
+        # Thread lock for thread-safe file access
+        self.file_lock = threading.Lock()
 
         # Make the temp dir for the class instance
         self.temp_dir = tempfile.mkdtemp()
@@ -372,6 +392,11 @@ class BinaryWaterfall:
         self.file.seek(address)
         return self.file.read(count)
 
+    def get_file_bytes_threadsafe(self, address, count):
+        with self.file_lock:
+            self.file.seek(address)
+            return self.file.read(count)
+
     def get_address(self, ms):
         # Get the size of a single "block" (a row, we only move in increments of 1 row)
         address_block_size = self.width * self.color_bytes
@@ -401,86 +426,141 @@ class BinaryWaterfall:
         else:
             return round((self.height - 1) / 2)
 
-    # A 1D Python byte string
+    # A 1D Python byte string (with GPU-accelerated pixel conversion)
     def get_frame_bytestring(self, ms):
-        picture_bytes = bytes()
-
         address = self.get_address(ms)
-        # Compensate for negative addresses
+        pad_front = 0
         if address < 0:
-            picture_bytes += b"\x00" * 3 * round(-address / self.color_bytes)
+            pad_front = 3 * round(-address / self.color_bytes)
             address = 0
 
-        # Get the maximum number of bytes that could be used for this frame
+        # Get the raw frame bytes from file
         frame_bytes = self.get_file_bytes(
             address=address,
             count=(self.width * self.height * self.color_bytes)
         )
 
-        full_length = (self.width * self.height * 3)
+        full_length = self.width * self.height * 3
 
+        # GPU-accelerated path
+        if _use_gpu and _gpu_device is not None and len(frame_bytes) > 0:
+            try:
+                return self._get_frame_bytestring_gpu(frame_bytes, pad_front, full_length)
+            except Exception:
+                pass  # Fall through to CPU path
+
+        # CPU path (original logic)
+        picture_bytes = b'\x00' * pad_front if pad_front > 0 else bytes()
         idx = 0
+        frame_len = len(frame_bytes)
+
         for row in range(self.height):
             for col in range(self.width):
-                # If we already have a full frame, stop the loops
                 if len(picture_bytes) >= full_length:
                     break
-
-                # Fill one RGB byte value
                 this_byte = [b'\x00', b'\x00', b'\x00']
                 for c in self.color_format:
-                    if c == constants.ColorFmtCode.RED:  # Red
-                        this_byte[0] = frame_bytes[idx:idx + 1]
-                    elif c == constants.ColorFmtCode.RED_INV:  # Red inverted
-                        this_byte[0] = helpers.filter_rgb_bytes(frame_bytes[idx:idx + 1], helpers.invert)
-                    elif c == constants.ColorFmtCode.GREEN:  # Green
-                        this_byte[1] = frame_bytes[idx:idx + 1]
-                    elif c == constants.ColorFmtCode.GREEN_INV:  # Green inverted
-                        this_byte[1] = helpers.filter_rgb_bytes(frame_bytes[idx:idx + 1], helpers.invert)
-                    elif c == constants.ColorFmtCode.BLUE:  # Blue
-                        this_byte[2] = frame_bytes[idx:idx + 1]
-                    elif c == constants.ColorFmtCode.BLUE_INV:  # Blue inverted
-                        this_byte[2] = helpers.filter_rgb_bytes(frame_bytes[idx:idx + 1], helpers.invert)
-                    elif c == constants.ColorFmtCode.WHITE:  # RGB
-                        this_byte[0] = frame_bytes[idx:idx + 1]
-                        this_byte[1] = frame_bytes[idx:idx + 1]
-                        this_byte[2] = frame_bytes[idx:idx + 1]
-                    elif c == constants.ColorFmtCode.WHITE_INV:   # RGB inverted
-                        this_byte[0] = helpers.filter_rgb_bytes(frame_bytes[idx:idx + 1], helpers.invert)
-                        this_byte[1] = helpers.filter_rgb_bytes(frame_bytes[idx:idx + 1], helpers.invert)
-                        this_byte[2] = helpers.filter_rgb_bytes(frame_bytes[idx:idx + 1], helpers.invert)
-
+                    if idx >= frame_len:
+                        break
+                    byte_val = frame_bytes[idx:idx + 1]
+                    if c == constants.ColorFmtCode.RED:
+                        this_byte[0] = byte_val
+                    elif c == constants.ColorFmtCode.RED_INV:
+                        this_byte[0] = helpers.filter_rgb_bytes(byte_val, helpers.invert)
+                    elif c == constants.ColorFmtCode.GREEN:
+                        this_byte[1] = byte_val
+                    elif c == constants.ColorFmtCode.GREEN_INV:
+                        this_byte[1] = helpers.filter_rgb_bytes(byte_val, helpers.invert)
+                    elif c == constants.ColorFmtCode.BLUE:
+                        this_byte[2] = byte_val
+                    elif c == constants.ColorFmtCode.BLUE_INV:
+                        this_byte[2] = helpers.filter_rgb_bytes(byte_val, helpers.invert)
+                    elif c == constants.ColorFmtCode.WHITE:
+                        this_byte[0] = this_byte[1] = this_byte[2] = byte_val
+                    elif c == constants.ColorFmtCode.WHITE_INV:
+                        inv = helpers.filter_rgb_bytes(byte_val, helpers.invert)
+                        this_byte[0] = this_byte[1] = this_byte[2] = inv
                     idx += 1
-
                 picture_bytes += b"".join(this_byte)
-            else:
-                continue
-            break
 
-        # Pad picture data if we don't have a full frame (near the end of the file)
-        picture_bytes_length = len(picture_bytes)
-        if picture_bytes_length < full_length:
-            pad_length = full_length - picture_bytes_length
-            picture_bytes += b"\x00" * pad_length
+        # Pad if short
+        if len(picture_bytes) < full_length:
+            picture_bytes += b'\x00' * (full_length - len(picture_bytes))
 
-        # Invert playhead row if needed
+        # Playhead
         if self.playhead_visible:
             playhead_row = self.get_playhead_row()
             row_size = self.width * 3
             playhead_start = playhead_row * row_size
             playhead_end = playhead_start + row_size
-
             playhead = picture_bytes[playhead_start:playhead_end]
-            playhead_contrast = helpers.filter_rgb_bytes(playhead, helpers.pick_shade_from_luminance)
-
+            ph_contrast = helpers.filter_rgb_bytes(playhead, helpers.pick_shade_from_luminance)
             playhead = helpers.filter_rgb_bytes(playhead, helpers.invert)
             playhead = helpers.filter_rgb_bytes(playhead, helpers.desaturate)
-            playhead = helpers.average_rgb_bytes(playhead, playhead_contrast)
-
-
+            playhead = helpers.average_rgb_bytes(playhead, ph_contrast)
             picture_bytes = picture_bytes[:playhead_start] + playhead + picture_bytes[playhead_end:]
 
         return picture_bytes
+
+    def _get_frame_bytestring_gpu(self, frame_bytes, pad_front, full_length):
+        """GPU-accelerated pixel conversion using PyTorch."""
+        import torch
+
+        # Determine channel indices from color format
+        color_format_codes = [c.value for c in self.color_format]
+        n_colors = len(color_format_codes)
+
+        # Pad input to full frame size
+        needed = self.width * self.height * n_colors
+        data = bytearray(frame_bytes)
+        if len(data) < needed:
+            data.extend(b'\x00' * (needed - len(data)))
+        data = bytes(data[:needed])
+
+        # Convert to uint8 tensor on GPU
+        inp = torch.frombuffer(bytearray(data), dtype=torch.uint8).to(_gpu_device)
+
+        # Build output tensor (R, G, B per pixel)
+        out = torch.zeros(self.width * self.height * 3, dtype=torch.uint8, device=_gpu_device)
+
+        # Vectorized color format application
+        for i, c in enumerate(color_format_codes):
+            channel_data = inp[i::n_colors]  # stride by n_colors
+            if c == 'r':  # RED
+                out[0::3] = channel_data
+            elif c == 'R':  # RED_INV
+                out[0::3] = 255 - channel_data
+            elif c == 'g':  # GREEN
+                out[1::3] = channel_data
+            elif c == 'G':  # GREEN_INV
+                out[1::3] = 255 - channel_data
+            elif c == 'b':  # BLUE
+                out[2::3] = channel_data
+            elif c == 'B':  # BLUE_INV
+                out[2::3] = 255 - channel_data
+            elif c == 'w':  # WHITE
+                out[0::3] = channel_data
+                out[1::3] = channel_data
+                out[2::3] = channel_data
+            elif c == 'W':  # WHITE_INV
+                inv = 255 - channel_data
+                out[0::3] = inv
+                out[1::3] = inv
+                out[2::3] = inv
+
+        result = out.cpu().numpy().tobytes()
+
+        # Prepend padding if needed
+        if pad_front > 0:
+            result = b'\x00' * pad_front + result
+
+        # Truncate/pad to exact length
+        if len(result) > full_length:
+            result = result[:full_length]
+        elif len(result) < full_length:
+            result += b'\x00' * (full_length - len(result))
+
+        return result
 
     # A PIL Image (RGB)
     def get_frame_image(self, ms):
