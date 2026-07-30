@@ -213,11 +213,17 @@ jobs:
           codesign --force --deep --sign - "${{ env.MAIN_NAME }}-macos-${{ matrix.arch }}.app" && \
             echo "Signed ad-hoc: ${{ env.MAIN_NAME }}-macos-${{ matrix.arch }}.app"
 
+      - name: Compress .app bundle
+        run: |
+          # Package as tar.gz so the .app bundle stays intact on download
+          tar czf "${{ env.MAIN_NAME }}-macos-${{ matrix.arch }}.tar.gz" "${{ env.MAIN_NAME }}-macos-${{ matrix.arch }}.app"
+          ls -lh "${{ env.MAIN_NAME }}-macos-${{ matrix.arch }}.tar.gz"
+
       - name: Upload artifact (macOS ${{ matrix.arch }})
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.MAIN_NAME }}-macos-${{ matrix.arch }}
-          path: ${{ env.MAIN_NAME }}-macos-${{ matrix.arch }}.app
+          path: ${{ env.MAIN_NAME }}-macos-${{ matrix.arch }}.tar.gz
 
   build-linux:
     name: Build Linux AppImage
@@ -373,14 +379,13 @@ jobs:
 
             ### Downloads:
             - **Windows (x86_64)**: `binary-waterfall-windows-x86_64.exe`
-            - **macOS (Intel)**: `binary-waterfall-macos-x86_64.app`
-            - **macOS (Apple Silicon)**: `binary-waterfall-macos-arm64.app`
+            - **macOS (Intel)**: `binary-waterfall-macos-x86_64.tar.gz`
+            - **macOS (Apple Silicon)**: `binary-waterfall-macos-arm64.tar.gz`
             - **Linux (x86_64)**: `binary-waterfall-linux-x86_64.AppImage`
 
             ### Installation
             - **Windows**: Download the `.exe` file and run it directly.
-            - **macOS (Intel)**: Download the `macos-x86_64` bundle, right-click and select "Open" to bypass Gatekeeper (first launch only).
-            - **macOS (Apple Silicon)**: Download the `macos-arm64` bundle, right-click and select "Open" to bypass Gatekeeper (first launch only).
+            - **macOS**: Download the `.tar.gz` file, extract it, then right-click the `.app` and select "Open" to bypass Gatekeeper (first launch only).
             - **Linux**: Download the `.AppImage` file, `chmod +x` it, and run it directly.
           files: |
             binary-waterfall-*/
