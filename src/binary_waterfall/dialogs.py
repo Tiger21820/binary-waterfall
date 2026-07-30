@@ -920,12 +920,12 @@ class HotkeysInfo(QDialog):
 
         self.frame_forward_label = QLabel("Frame Forward / Right 15s:")
         self.frame_forward_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
-        self.frame_forward_key_label = QLabel("➡️ / .")
+        self.frame_forward_key_label = QLabel("➡️")
         self.frame_forward_key_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
 
         self.frame_back_label = QLabel("Frame Back / Left 15s:")
         self.frame_back_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
-        self.frame_back_key_label = QLabel("⬅️ / ,")
+        self.frame_back_key_label = QLabel("⬅️")
         self.frame_back_key_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
 
         self.restart_label = QLabel("Restart:")
@@ -948,7 +948,7 @@ class HotkeysInfo(QDialog):
         self.mute_key_label = QLabel("M")
         self.mute_key_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
 
-        self.scroll_label = QLabel("Scroll Up/Down:")
+        self.scroll_label = QLabel("Scroll Up / Down // . / ,:")
         self.scroll_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
         self.scroll_key_label = QLabel("Mouse Wheel (Fast)")
         self.scroll_key_label.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
@@ -1017,7 +1017,7 @@ class About(QDialog):
         self.about_text = QLabel(
             f"{constants.TITLE} v{constants.VERSION}\n\n"
             f"Upstream by Ella Jameson (nimaid)\n"
-            f"by {constants.COPYRIGHT}\n"
+            f"by 𝚒𝚖𝚙𝚘𝚛𝚝 {{ 𝘑𝘢𝘤𝘬 𝘏𝘶𝘢𝘯𝘨 }} 𝚏𝚛𝚘𝚖 '☘️';\n"
             f"© Copyright 2026\n\n"
             f"{constants.DESCRIPTION}\n\n"
             f"Upstream Project Home Page:\n{constants.PROJECT_URL}\n\n"
