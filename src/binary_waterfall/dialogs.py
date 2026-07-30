@@ -3,7 +3,7 @@ import sys
 import webbrowser
 import datetime
 import platform
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QSettings
 from PyQt5.QtWidgets import (
     QGridLayout, QLabel, QPushButton, QDialog, QDialogButtonBox, QComboBox, QLineEdit, QCheckBox, QSpinBox,
     QDoubleSpinBox, QMessageBox
@@ -87,6 +87,9 @@ class AudioSettings(QDialog):
         self.confirm_buttons.accepted.connect(self.accept)
         self.confirm_buttons.rejected.connect(self.reject)
 
+        self.reset_button = QPushButton("Reset to Defaults")
+        self.reset_button.clicked.connect(self.reset_defaults)
+
         self.main_layout = QGridLayout()
 
         self.main_layout.addWidget(self.channels_label, 0, 0)
@@ -97,11 +100,19 @@ class AudioSettings(QDialog):
         self.main_layout.addWidget(self.sample_rate_entry, 2, 1)
         self.main_layout.addWidget(self.volume_label, 3, 0)
         self.main_layout.addWidget(self.volume_entry, 3, 1)
-        self.main_layout.addWidget(self.confirm_buttons, 4, 0, 1, 2)
+        self.main_layout.addWidget(self.reset_button, 4, 0, 1, 2)
+        self.main_layout.addWidget(self.confirm_buttons, 5, 0, 1, 2)
 
         self.setLayout(self.main_layout)
 
         self.resize_window()
+
+    def reset_defaults(self):
+        defaults = constants.DEFAULTS
+        self.channels_entry.setCurrentIndex(0 if defaults["num_channels"] == 1 else 1)
+        self.sample_size_entry.setCurrentIndex(defaults["sample_bytes"] - 1)
+        self.sample_rate_entry.setValue(defaults["sample_rate"])
+        self.volume_entry.setValue(defaults["file_volume"])
 
     def get_audio_settings(self):
         result = dict()
@@ -237,6 +248,9 @@ class VideoSettings(QDialog):
         self.confirm_buttons.accepted.connect(self.accept)
         self.confirm_buttons.rejected.connect(self.reject)
 
+        self.reset_button = QPushButton("Reset to Defaults")
+        self.reset_button.clicked.connect(self.reset_defaults)
+
         self.main_layout = QGridLayout()
 
         self.main_layout.addWidget(self.width_label, 0, 0)
@@ -253,11 +267,29 @@ class VideoSettings(QDialog):
         self.main_layout.addWidget(self.flip_v_entry, 5, 1)
         self.main_layout.addWidget(self.flip_h_entry_label, 6, 0)
         self.main_layout.addWidget(self.flip_h_entry, 6, 1)
-        self.main_layout.addWidget(self.confirm_buttons, 7, 0, 1, 2)
+        self.main_layout.addWidget(self.reset_button, 7, 0, 1, 2)
+        self.main_layout.addWidget(self.confirm_buttons, 8, 0, 1, 2)
 
         self.setLayout(self.main_layout)
 
         self.resize_window()
+
+    def reset_defaults(self):
+        defaults = constants.DEFAULTS
+        self.width_entry.setValue(defaults["width"])
+        self.height_entry.setValue(defaults["height"])
+        self.color_format_entry.setText(defaults["color_format_string"])
+        self.color_format = defaults["color_format_string"]
+        aln = defaults["alignment"]
+        if aln == constants.AlignmentCode.START:
+            self.alignment_entry.setCurrentIndex(0)
+        elif aln == constants.AlignmentCode.MIDDLE:
+            self.alignment_entry.setCurrentIndex(1)
+        elif aln == constants.AlignmentCode.END:
+            self.alignment_entry.setCurrentIndex(2)
+        self.playhead_entry.setChecked(defaults["playhead_visible"])
+        self.flip_v_entry.setChecked(defaults["flip_v"])
+        self.flip_h_entry.setChecked(defaults["flip_h"])
 
     def get_video_settings(self):
         result = dict()
@@ -367,17 +399,26 @@ class PlayerSettings(QDialog):
         self.confirm_buttons.accepted.connect(self.accept)
         self.confirm_buttons.rejected.connect(self.reject)
 
+        self.reset_button = QPushButton("Reset to Defaults")
+        self.reset_button.clicked.connect(self.reset_defaults)
+
         self.main_layout = QGridLayout()
 
         self.main_layout.addWidget(self.max_dim_label, 0, 0)
         self.main_layout.addWidget(self.max_dim_entry, 0, 1)
         self.main_layout.addWidget(self.fps_label, 1, 0)
         self.main_layout.addWidget(self.fps_entry, 1, 1)
-        self.main_layout.addWidget(self.confirm_buttons, 2, 0, 1, 2)
+        self.main_layout.addWidget(self.reset_button, 2, 0, 1, 2)
+        self.main_layout.addWidget(self.confirm_buttons, 3, 0, 1, 2)
 
         self.setLayout(self.main_layout)
 
         self.resize_window()
+
+    def reset_defaults(self):
+        defaults = constants.DEFAULTS
+        self.max_dim_entry.setValue(defaults["max_dim"])
+        self.fps_entry.setValue(defaults["player_fps"])
 
     def get_player_settings(self):
         result = dict()
@@ -989,76 +1030,6 @@ class HotkeysInfo(QDialog):
         self.main_layout.addWidget(self.scroll_mod_label, 10, 0)
         self.main_layout.addWidget(self.scroll_mod_key_label, 10, 1)
         self.main_layout.addWidget(self.confirm_buttons, 11, 0, 1, 2)
-
-        self.setLayout(self.main_layout)
-
-        self.resize_window()
-
-    def resize_window(self):
-        self.setFixedSize(self.sizeHint())
-
-
-# About dialog
-#   Gives info about the program
-class About(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent=parent)
-        self.setWindowTitle(f"About {constants.TITLE}")
-        self.setWindowIcon(QIcon(constants.ICON_PATHS["program"]))
-
-        # Hide "?" button
-        self.setWindowFlags(self.windowFlags() ^ Qt.WindowContextHelpButtonHint)
-
-        self.icon_size = 200
-
-        self.icon_label = QLabel()
-        self.icon_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.icon_label.setPixmap(QPixmap(constants.ICON_PATHS["program"]))
-        self.icon_label.setScaledContents(True)
-        self.icon_label.setFixedSize(self.icon_size, self.icon_size)
-
-        # Build info
-        try:
-            build_time = os.environ.get('BINARY_WATERFALL_BUILD_TIME', '')
-            if not build_time:
-                build_time = datetime.datetime.fromtimestamp(
-                    os.path.getmtime(__file__)).strftime('%Y-%m-%d %H:%M:%S')
-            build_os = os.environ.get('BINARY_WATERFALL_BUILD_OS', '')
-            if not build_os:
-                # Fallback for local runs — CI already provides OS + kernel version
-                system = platform.system()
-                kernel_version = platform.release()
-                if system == 'Darwin':
-                    build_os = f'macOS {kernel_version}'
-                elif system == 'Linux':
-                    build_os = f'Linux {kernel_version}'
-                elif system == 'Windows':
-                    build_os = f'Windows {kernel_version}'
-                else:
-                    build_os = f'{system} {kernel_version}'
-            build_info = f"Built: {build_time} | {build_os}"
-        except Exception:
-            build_info = ""
-
-        self.about_text = QLabel(
-            f"{constants.TITLE} v{constants.VERSION}\n\n"
-            f"Upstream by Ella Jameson (nimaid)\n"
-            f"by 𝚒𝚖𝚙𝚘𝚛𝚝 {{ 𝘑𝘢𝘤𝘬 𝘏𝘶𝘢𝘯𝘨 }} 𝚏𝚛𝚘𝚖 '☘️';\n"
-            f"© Copyright 2026\n\n"
-            f"{constants.DESCRIPTION}\n\n"
-            f"Upstream Project Home Page:\n{constants.PROJECT_URL}\n\n"
-            f"Project Home Page:\nhttps://github.com/Jack-Huang-2020/binary-waterfall\n\n"
-            f"{build_info}")
-        self.about_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        self.confirm_buttons = QDialogButtonBox(QDialogButtonBox.Ok)
-        self.confirm_buttons.accepted.connect(self.accept)
-
-        self.main_layout = QGridLayout()
-
-        self.main_layout.addWidget(self.icon_label, 0, 0, 2, 1)
-        self.main_layout.addWidget(self.about_text, 0, 1)
-        self.main_layout.addWidget(self.confirm_buttons, 1, 0, 1, 2)
 
         self.setLayout(self.main_layout)
 

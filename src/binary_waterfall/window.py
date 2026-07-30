@@ -23,7 +23,50 @@ class MyQMainWindow(QMainWindow):
         self.setWindowTitle(f"{constants.TITLE}")
         self.setWindowIcon(QIcon(constants.ICON_PATHS["program"]))
 
-        self.bw = generators.BinaryWaterfall()
+        # Load saved settings
+        self.settings = QSettings("BinaryWaterfall", "BinaryWaterfall")
+
+        # Load video settings from saved config
+        saved_width = self.settings.value("video/width", constants.DEFAULTS["width"], type=int)
+        saved_height = self.settings.value("video/height", constants.DEFAULTS["height"], type=int)
+        saved_color_format = self.settings.value("video/color_format", constants.DEFAULTS["color_format_string"], type=str)
+        saved_alignment_str = self.settings.value("video/alignment", "")
+        saved_playhead = self.settings.value("video/playhead_visible", constants.DEFAULTS["playhead_visible"], type=bool)
+        saved_flip_v = self.settings.value("video/flip_v", constants.DEFAULTS["flip_v"], type=bool)
+        saved_flip_h = self.settings.value("video/flip_h", constants.DEFAULTS["flip_h"], type=bool)
+
+        # Map saved alignment string to enum
+        saved_alignment = constants.DEFAULTS["alignment"]
+        if saved_alignment_str == "start":
+            saved_alignment = constants.AlignmentCode.START
+        elif saved_alignment_str == "middle":
+            saved_alignment = constants.AlignmentCode.MIDDLE
+        elif saved_alignment_str == "end":
+            saved_alignment = constants.AlignmentCode.END
+
+        # Load audio settings from saved config
+        saved_num_channels = self.settings.value("audio/num_channels", constants.DEFAULTS["num_channels"], type=int)
+        saved_sample_bytes = self.settings.value("audio/sample_bytes", constants.DEFAULTS["sample_bytes"], type=int)
+        saved_sample_rate = self.settings.value("audio/sample_rate", constants.DEFAULTS["sample_rate"], type=int)
+        saved_file_volume = self.settings.value("audio/file_volume", constants.DEFAULTS["file_volume"], type=int)
+
+        # Load player settings from saved config
+        saved_max_dim = self.settings.value("player/max_dim", constants.DEFAULTS["max_dim"], type=int)
+        saved_fps = self.settings.value("player/fps", constants.DEFAULTS["player_fps"], type=int)
+
+        self.bw = generators.BinaryWaterfall(
+            width=saved_width,
+            height=saved_height,
+            color_format_string=saved_color_format,
+            num_channels=saved_num_channels,
+            sample_bytes=saved_sample_bytes,
+            sample_rate=saved_sample_rate,
+            volume=saved_file_volume,
+            flip_v=saved_flip_v,
+            flip_h=saved_flip_h,
+            alignment=saved_alignment,
+            playhead_visible=saved_playhead
+        )
 
         self.last_save_location = constants.USER_DIR
         self.last_load_location = constants.USER_DIR
@@ -50,7 +93,9 @@ class MyQMainWindow(QMainWindow):
             binary_waterfall=self.bw,
             display=self.player_label,
             set_playbutton_function=self.set_play_button,
-            set_seekbar_function=self.seek_bar.setValue
+            set_seekbar_function=self.seek_bar.setValue,
+            max_dim=saved_max_dim,
+            fps=saved_fps
         )
 
         self.current_volume = self.player.volume
@@ -595,6 +640,30 @@ class MyQMainWindow(QMainWindow):
         self.export_menu.setEnabled(False)
         self.file_menu_close.setEnabled(False)
 
+    def save_audio_settings(self):
+        self.settings.setValue("audio/num_channels", self.bw.num_channels)
+        self.settings.setValue("audio/sample_bytes", self.bw.sample_bytes)
+        self.settings.setValue("audio/sample_rate", self.bw.sample_rate)
+        self.settings.setValue("audio/file_volume", self.bw.volume)
+
+    def save_video_settings(self):
+        self.settings.setValue("video/width", self.bw.width)
+        self.settings.setValue("video/height", self.bw.height)
+        self.settings.setValue("video/color_format", self.bw.get_color_format_string())
+        aln_str = "end"
+        if self.bw.alignment == constants.AlignmentCode.START:
+            aln_str = "start"
+        elif self.bw.alignment == constants.AlignmentCode.MIDDLE:
+            aln_str = "middle"
+        self.settings.setValue("video/alignment", aln_str)
+        self.settings.setValue("video/playhead_visible", self.bw.playhead_visible)
+        self.settings.setValue("video/flip_v", self.bw.flip_v)
+        self.settings.setValue("video/flip_h", self.bw.flip_h)
+
+    def save_player_settings(self):
+        self.settings.setValue("player/max_dim", self.player.max_dim)
+        self.settings.setValue("player/fps", self.player.fps)
+
     def audio_settings_clicked(self):
         popup = dialogs.AudioSettings(
             num_channels=self.bw.num_channels,
@@ -615,6 +684,7 @@ class MyQMainWindow(QMainWindow):
                 volume=audio_settings["volume"]
             )
 
+            self.save_audio_settings()
             self.update_seekbar()
 
     def video_settings_clicked(self):
@@ -651,6 +721,7 @@ class MyQMainWindow(QMainWindow):
             )
             self.player.refresh_dims()
             self.player.update_image()
+            self.save_video_settings()
             # We need to wait a moment for the size hint to be computed
             QTimer.singleShot(10, self.resize_window)
 
@@ -667,6 +738,7 @@ class MyQMainWindow(QMainWindow):
             player_settings = popup.get_player_settings()
             self.player.set_fps(fps=player_settings["fps"])
             self.player.update_dims(max_dim=player_settings["max_view_dim"])
+            self.save_player_settings()
             # We need to wait a moment for the size hint to be computed
             QTimer.singleShot(10, self.resize_window)
 

@@ -21,13 +21,13 @@ try:
     if torch.cuda.is_available():
         _use_gpu = True
         _gpu_device = torch.device('cuda')
-        print(f"[Binary Waterfall] GPU acceleration enabled: {torch.cuda.get_device_name(0)}")
+        print(f"[Binary Waterfall Revived] GPU acceleration enabled: {torch.cuda.get_device_name(0)}")
     elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
         _use_gpu = True
         _gpu_device = torch.device('mps')
-        print(f"[Binary Waterfall] GPU acceleration enabled: Apple Silicon (MPS)")
+        print(f"[Binary Waterfall Revived] GPU acceleration enabled: Apple Silicon (MPS)")
     else:
-        print("[Binary Waterfall] PyTorch available but no GPU found, using CPU multiprocessing")
+        print("[Binary Waterfall Revived] PyTorch available but no GPU found, using CPU multiprocessing")
 except ImportError:
     pass
 except Exception:
