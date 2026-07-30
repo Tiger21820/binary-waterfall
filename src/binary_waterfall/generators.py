@@ -4,6 +4,7 @@ import tempfile
 import math
 import wave
 import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from PIL import Image, ImageOps
 import pydub
 from PyQt5.QtGui import QImage
@@ -449,10 +450,104 @@ class BinaryWaterfall:
             except Exception:
                 pass  # Fall through to CPU path
 
-        # CPU path (original logic)
+        # CPU path (multi-core parallel for performance)
+        frame_len = len(frame_bytes)
+        n_colors = len(self.color_format)
+        n_workers = min(threading.active_count() + 2, os.cpu_count() or 4)
+
+        # For small frames, single-threaded is faster (no threading overhead)
+        if self.width * self.height < 4096 or n_workers <= 1:
+            return self._get_frame_bytestring_cpu(
+                frame_bytes, frame_len, pad_front, full_length
+            )
+
+        return self._get_frame_bytestring_cpu_multicore(
+            frame_bytes, frame_len, pad_front, full_length, n_workers
+        )
+
+    def _process_row(self, row_idx, frame_bytes, frame_len, n_colors, row_width, full_length):
+        """Process a single row of pixels (used by multi-core CPU path)."""
+        row_start = row_idx * row_width * n_colors
+        row_data = frame_bytes[row_start:row_start + row_width * n_colors]
+        row_pixels = bytearray()
+
+        for col in range(row_width):
+            byte_offset = col * n_colors
+            this_byte = [0, 0, 0]
+            for ci, c in enumerate(self.color_format):
+                if byte_offset + ci >= len(row_data):
+                    break
+                byte_val = row_data[byte_offset + ci]
+                if c == constants.ColorFmtCode.RED:
+                    this_byte[0] = byte_val
+                elif c == constants.ColorFmtCode.RED_INV:
+                    this_byte[0] = 255 - byte_val
+                elif c == constants.ColorFmtCode.GREEN:
+                    this_byte[1] = byte_val
+                elif c == constants.ColorFmtCode.GREEN_INV:
+                    this_byte[1] = 255 - byte_val
+                elif c == constants.ColorFmtCode.BLUE:
+                    this_byte[2] = byte_val
+                elif c == constants.ColorFmtCode.BLUE_INV:
+                    this_byte[2] = 255 - byte_val
+                elif c == constants.ColorFmtCode.WHITE:
+                    this_byte[0] = this_byte[1] = this_byte[2] = byte_val
+                elif c == constants.ColorFmtCode.WHITE_INV:
+                    inv = 255 - byte_val
+                    this_byte[0] = this_byte[1] = this_byte[2] = inv
+
+            row_pixels.extend(this_byte)
+
+        return row_idx, bytes(row_pixels)
+
+    def _get_frame_bytestring_cpu_multicore(self, frame_bytes, frame_len, pad_front, full_length, n_workers):
+        """Multi-core CPU pixel conversion using ThreadPoolExecutor."""
+        row_width = self.width
+        n_colors = len(self.color_format)
+
+        # Build row tasks
+        rows_to_process = list(range(self.height))
+
+        row_results = [None] * self.height
+        with ThreadPoolExecutor(max_workers=n_workers) as executor:
+            futures = {
+                executor.submit(
+                    self._process_row, r, frame_bytes, frame_len, n_colors, row_width, full_length
+                ): r for r in rows_to_process
+            }
+            for future in as_completed(futures):
+                row_idx, row_bytes = future.result()
+                row_results[row_idx] = row_bytes
+
+        # Assemble frame
+        picture_bytes = b'\x00' * pad_front if pad_front > 0 else bytes()
+        for row_bytes in row_results:
+            if row_bytes is not None:
+                picture_bytes += row_bytes
+
+        # Pad if short
+        if len(picture_bytes) < full_length:
+            picture_bytes += b'\x00' * (full_length - len(picture_bytes))
+
+        # Playhead
+        if self.playhead_visible:
+            playhead_row = self.get_playhead_row()
+            row_size = self.width * 3
+            playhead_start = playhead_row * row_size
+            playhead_end = playhead_start + row_size
+            playhead = picture_bytes[playhead_start:playhead_end]
+            ph_contrast = helpers.filter_rgb_bytes(playhead, helpers.pick_shade_from_luminance)
+            playhead = helpers.filter_rgb_bytes(playhead, helpers.invert)
+            playhead = helpers.filter_rgb_bytes(playhead, helpers.desaturate)
+            playhead = helpers.average_rgb_bytes(playhead, ph_contrast)
+            picture_bytes = picture_bytes[:playhead_start] + playhead + picture_bytes[playhead_end:]
+
+        return picture_bytes
+
+    def _get_frame_bytestring_cpu(self, frame_bytes, frame_len, pad_front, full_length):
+        """Single-threaded CPU pixel conversion (fallback for small frames)."""
         picture_bytes = b'\x00' * pad_front if pad_front > 0 else bytes()
         idx = 0
-        frame_len = len(frame_bytes)
 
         for row in range(self.height):
             for col in range(self.width):
